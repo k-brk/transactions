@@ -22,9 +22,7 @@ pub fn validate_ext(args: &Args) -> Result<(), AppError> {
         .transactions_file
         .extension()
         .and_then(OsStr::to_str)
-        .ok_or(AppError::InvalidFileExt(
-            "Unable to validate extension".to_string(),
-        ))?;
+        .ok_or_else(|| AppError::InvalidFileExt("Unable to validate extension".to_string()))?;
 
     if ext != FILE_EXT {
         return Err(AppError::InvalidFileExt(ext.to_string()));

@@ -12,6 +12,7 @@ pub trait Store {
     fn accounts(&self) -> &Self::Storage;
 }
 
+/// Represents collection of accounts
 #[derive(Default)]
 pub struct AccountStore {
     accounts: HashMap<ClientID, Account>,
@@ -23,11 +24,11 @@ impl Store for AccountStore {
     fn get_mut_or_new(&mut self, client_id: ClientID) -> &mut Account {
         self.accounts
             .entry(client_id)
-            .or_insert(Account::new(client_id))
+            .or_insert_with(|| Account::new(client_id))
     }
 
     fn accounts(&self) -> &Self::Storage {
-        return &self.accounts;
+        &self.accounts
     }
 }
 

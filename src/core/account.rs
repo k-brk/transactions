@@ -15,11 +15,11 @@ pub enum AccountError {
 #[derive(Serialize, Default, Debug)]
 pub struct Account {
     #[serde(rename = "client")]
-    id: ClientID,
-    available: Amount,
-    held: Amount,
-    total: Amount,
-    locked: bool,
+    pub(crate) id: ClientID,
+    pub(crate) available: Amount,
+    pub(crate) held: Amount,
+    pub(crate) total: Amount,
+    pub(crate) locked: bool,
 }
 
 impl Account {
@@ -30,12 +30,11 @@ impl Account {
         }
     }
 
-    /// Applies delta of user balance
+    /// Applies delta of user balance, changes are applied only when account is not locked
     pub fn apply(&mut self, change: AccountDelta) -> Result<(), AccountError> {
         if self.locked {
             return Err(AccountError::Locked);
         }
-
 
         if let Some(available) = change.available {
             if self.available + available < Decimal::ZERO {
@@ -62,6 +61,8 @@ impl Account {
     }
 }
 
+
+
 /// Represents potential account changes which are outcome of incoming transaction
 #[derive(Default)]
 pub struct AccountDelta {
@@ -70,6 +71,7 @@ pub struct AccountDelta {
     pub locked: Option<bool>,
 }
 
+// Helpers for different kind of transactions
 impl AccountDelta {
     pub fn none() -> Self {
         Self::default()
@@ -116,7 +118,6 @@ impl AccountDelta {
             ..Default::default()
         }
     }
-
 }
 
 #[cfg(test)]
@@ -126,7 +127,7 @@ mod tests {
     use super::{Account, AccountDelta, AccountError};
 
     #[test]
-    fn deposit_should_increase_available_funds_and_total() -> Result<(), AccountError>{
+    fn deposit_should_increase_available_funds_and_total() -> Result<(), AccountError> {
         let mut account = Account::new(1);
 
         let deposit = AccountDelta::deposit(Amount::ONE);
@@ -139,7 +140,7 @@ mod tests {
     }
 
     #[test]
-    fn withdrawal_should_decrease_available_funds_and_total() -> Result<(), AccountError>{
+    fn withdrawal_should_decrease_available_funds_and_total() -> Result<(), AccountError> {
         let mut account = Account::new(1);
 
         let deposit = AccountDelta::deposit(Amount::TWO);
@@ -147,7 +148,6 @@ mod tests {
 
         assert_eq!(account.available, Amount::TWO);
         assert_eq!(account.total, Amount::TWO);
-
 
         let withdrawal = AccountDelta::withdrawal(Amount::ONE);
         account.apply(withdrawal)?;
@@ -159,7 +159,7 @@ mod tests {
     }
 
     #[test]
-    fn withdrawal_should_fail_when_insufficent_funds() -> Result<(), AccountError>{
+    fn withdrawal_should_fail_when_insufficent_funds() -> Result<(), AccountError> {
         let mut account = Account::new(1);
 
         let deposit = AccountDelta::deposit(Amount::TWO);
@@ -167,7 +167,6 @@ mod tests {
 
         assert_eq!(account.available, Amount::TWO);
         assert_eq!(account.total, Amount::TWO);
-
 
         let withdrawal = AccountDelta::withdrawal(Amount::TEN);
 
@@ -185,7 +184,8 @@ mod tests {
     }
 
     #[test]
-    fn dispute_on_deposit_should_decrease_available_funds_and_increase_held() -> Result<(), AccountError>{
+    fn dispute_on_deposit_should_decrease_available_funds_and_increase_held(
+    ) -> Result<(), AccountError> {
         let mut account = Account::new(1);
 
         let deposit = AccountDelta::deposit(Amount::TWO);
@@ -193,7 +193,6 @@ mod tests {
 
         assert_eq!(account.available, Amount::TWO);
         assert_eq!(account.total, Amount::TWO);
-
 
         let dispute = AccountDelta::dispute_deposit(Amount::ONE);
         account.apply(dispute)?;
@@ -205,9 +204,8 @@ mod tests {
         Ok(())
     }
 
-
     #[test]
-    fn dispute_on_withdrawal_should_increase_held() -> Result<(), AccountError>{
+    fn dispute_on_withdrawal_should_increase_held() -> Result<(), AccountError> {
         let mut account = Account::new(1);
 
         let deposit = AccountDelta::deposit(Amount::TWO);
@@ -215,7 +213,6 @@ mod tests {
 
         assert_eq!(account.available, Amount::TWO);
         assert_eq!(account.total, Amount::TWO);
-
 
         let withdrawal = AccountDelta::withdrawal(Amount::ONE);
         account.apply(withdrawal)?;
@@ -234,9 +231,8 @@ mod tests {
         Ok(())
     }
 
-
     #[test]
-    fn resolve_should_decrease_held_funds_and_increase_available() -> Result<(), AccountError>{
+    fn resolve_should_decrease_held_funds_and_increase_available() -> Result<(), AccountError> {
         let mut account = Account::new(1);
 
         let deposit = AccountDelta::deposit(Amount::TWO);
@@ -245,14 +241,12 @@ mod tests {
         assert_eq!(account.available, Amount::TWO);
         assert_eq!(account.total, Amount::TWO);
 
-
         let dispute = AccountDelta::dispute_deposit(Amount::ONE);
         account.apply(dispute)?;
 
         assert_eq!(account.held, Amount::ONE);
         assert_eq!(account.available, Amount::ONE);
         assert_eq!(account.total, Amount::TWO);
-
 
         let resolve = AccountDelta::resolve(Amount::ONE);
         account.apply(resolve)?;
@@ -265,7 +259,8 @@ mod tests {
     }
 
     #[test]
-    fn chargeback_should_decrease_held_funds_increase_available_and_lock_acc() -> Result<(), AccountError>{
+    fn chargeback_should_decrease_held_funds_increase_available_and_lock_acc(
+    ) -> Result<(), AccountError> {
         let mut account = Account::new(1);
 
         let deposit = AccountDelta::deposit(Amount::TWO);
@@ -274,14 +269,12 @@ mod tests {
         assert_eq!(account.available, Amount::TWO);
         assert_eq!(account.total, Amount::TWO);
 
-
         let dispute = AccountDelta::dispute_deposit(Amount::ONE);
         account.apply(dispute)?;
 
         assert_eq!(account.held, Amount::ONE);
         assert_eq!(account.available, Amount::ONE);
         assert_eq!(account.total, Amount::TWO);
-
 
         let chargeback = AccountDelta::chargeback(Amount::ONE);
         account.apply(chargeback)?;
@@ -295,7 +288,7 @@ mod tests {
     }
 
     #[test]
-    fn locked_acc_should_not_apply_any_change() -> Result<(), AccountError>{
+    fn locked_acc_should_not_apply_any_change() -> Result<(), AccountError> {
         let mut account = Account::new(1);
 
         let deposit = AccountDelta::deposit(Amount::TWO);
@@ -304,14 +297,12 @@ mod tests {
         assert_eq!(account.available, Amount::TWO);
         assert_eq!(account.total, Amount::TWO);
 
-
         let dispute = AccountDelta::dispute_deposit(Amount::TWO);
         account.apply(dispute)?;
 
         assert_eq!(account.held, Amount::TWO);
         assert_eq!(account.available, Amount::ZERO);
         assert_eq!(account.total, Amount::TWO);
-
 
         let chargeback = AccountDelta::chargeback(Amount::TWO);
         account.apply(chargeback)?;
@@ -321,9 +312,7 @@ mod tests {
         assert_eq!(account.total, Amount::ZERO);
         assert_eq!(account.locked, true);
 
-
         let deposit = AccountDelta::deposit(Amount::TWO);
-
 
         let result = account.apply(deposit);
 
