@@ -28,14 +28,14 @@ Delta based approach has been choosen, each transaction is converted to structur
     ```     
            Transaction
                 │
-        ┌───────▼────────┐
+        ┌───────▼─────────┐
         │                 │
         │      Engine     │
         │                 │
         └───────┬─────────┘
                 │ Transaction
                 │
-        ┌───────▼────────┐
+        ┌───────▼─────────┐
         │                 │
         │   Transaction   │
         │    Processor    │
@@ -43,7 +43,7 @@ Delta based approach has been choosen, each transaction is converted to structur
         └───────┬─────────┘
                 │ AccountDelta
                 │
-        ┌───────▼────────┐
+        ┌───────▼─────────┐
         │                 │
         │     Account     │
         │                 │
