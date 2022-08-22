@@ -13,6 +13,7 @@ mod tests {
         transaction::{Transaction, TransactionID, TransactionKind, TransactionMetadata},
     };
 
+    // Helper for creating transaction
     pub fn transaction(
         kind: TransactionKind,
         tx_id: TransactionID,

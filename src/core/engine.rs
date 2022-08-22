@@ -56,16 +56,16 @@ where
 
         match self.accounts.get_mut_or_new(client_id).apply(change) {
             Ok(_) => {
-                self.transactions
-                    .set_state(tx_id, super::transaction::TransactionState::Success);
+                self.transactions.succeed(tx_id);
             }
-            Err(_) => {
-                self.transactions
-                    .set_state(tx_id, super::transaction::TransactionState::Failed);
+            Err(err) => {
+                self.transactions.failed(tx_id);
+                log::error!("Transaction {:?} failed: {:?}", tx_id, err);
             }
         }
     }
 
+    // returns all users accounts
     pub fn accounts(&self) -> &A::Storage {
         self.accounts.accounts()
     }

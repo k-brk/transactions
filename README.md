@@ -82,4 +82,5 @@ Delta based approach has been choosen, each transaction is converted to structur
 
 ## Additional assumptions
 
-- Account can have debt only when there is dispute on deposit which has been already withdrawn
+- Dispute of deposit causes debt when user has lower available amount than transaction amount
+- Dispute of dispute/resolved/chargeback transaction is not possible

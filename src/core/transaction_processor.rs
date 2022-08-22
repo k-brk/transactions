@@ -35,9 +35,18 @@ where
         }
     }
 
-    pub fn set_state(&mut self, tx_id: TransactionID, state: TransactionState) {
+    pub fn succeed(&mut self, tx_id: TransactionID) {
+        self.set_state(tx_id, TransactionState::Succeeded)
+    }
+
+    pub fn failed(&mut self, tx_id: TransactionID) {
+        self.set_state(tx_id, TransactionState::Failed)
+    }
+
+    fn set_state(&mut self, tx_id: TransactionID, state: TransactionState) {
         if let Some(tx) = self.transactions.get_mut(&tx_id) {
-            if tx.state != TransactionState::Disputed {
+            // New transaction can either succes or fail, can't be anything else as it is not fully processed yet.
+            if tx.state == TransactionState::New {
                 tx.state = state;
             }
         }
@@ -55,14 +64,21 @@ where
     ///
     /// [`TransactionState`] is set to [`TransactionState::Disputed`].
     fn dispute(&mut self, disputed_tx_id: TransactionID) -> AccountDelta {
-        if let Some(transaction) = self.transactions.get(&disputed_tx_id) {
+        if let Some(transaction) = self.transactions.get_mut(&disputed_tx_id) {
+            if transaction.state == TransactionState::Resolved
+                || transaction.state == TransactionState::Chargeback
+                || transaction.state == TransactionState::Disputed
+            {
+                return AccountDelta::none();
+            }
+
             match transaction.kind {
                 TransactionKind::Deposit { amount } => {
-                    self.set_state(disputed_tx_id, TransactionState::Disputed);
+                    transaction.state = TransactionState::Disputed;
                     AccountDelta::dispute_deposit(amount)
                 }
                 TransactionKind::Withdrawal { amount } => {
-                    self.set_state(disputed_tx_id, TransactionState::Disputed);
+                    transaction.state = TransactionState::Disputed;
                     AccountDelta::dispute_withdrawal(amount)
                 }
                 _ => AccountDelta::none(),
@@ -84,18 +100,19 @@ where
     /// - Decrease held funds by disputed amount
     ///
     fn resolve(&mut self, tx_id: TransactionID) -> AccountDelta {
-        if let Some(transaction) = self.transactions.get(&tx_id) {
-            if transaction.state == TransactionState::Disputed {
-                let change = match transaction.kind {
-                    TransactionKind::Deposit { amount }
-                    | TransactionKind::Withdrawal { amount } => {
-                        self.set_state(tx_id, TransactionState::Resolved);
-                        AccountDelta::resolve(amount)
-                    }
+        if let Some(transaction) = self.transactions.get_mut(&tx_id) {
+            if transaction.state != TransactionState::Disputed {
+                return AccountDelta::none();
+            }
 
-                    _ => AccountDelta::none(),
-                };
-                return change;
+            match transaction.kind {
+                TransactionKind::Deposit { amount } | TransactionKind::Withdrawal { amount } => {
+                    transaction.state = TransactionState::Resolved;
+
+                    return AccountDelta::resolve(amount);
+                }
+
+                _ => return AccountDelta::none(),
             }
         }
         AccountDelta::none()
@@ -106,12 +123,13 @@ where
     /// Held funds are being withdrawn and user account is immediately locked after this operation
     ///
     fn chargeback(&mut self, tx_id: TransactionID) -> AccountDelta {
-        if let Some(transaction) = self.transactions.get(&tx_id) {
+        if let Some(transaction) = self.transactions.get_mut(&tx_id) {
             if transaction.state == TransactionState::Disputed {
                 let change = match transaction.kind {
                     TransactionKind::Deposit { amount }
                     | TransactionKind::Withdrawal { amount } => {
-                        self.set_state(tx_id, TransactionState::Chargeback);
+                        transaction.state = TransactionState::Chargeback;
+
                         AccountDelta::chargeback(amount)
                     }
 
@@ -356,6 +374,54 @@ mod tests {
         );
         assert_eq!(resolve_change.held.unwrap_or_default(), Amount::new(-3, 1));
         assert!(dispute_change.locked.is_none());
+    }
+
+    #[test]
+    fn resolve_on_resolved_dispute_of_deposit_transaction_should_do_nothing() {
+        let mut processor = TransactionProcessor::<TransactionStore>::default();
+
+        let deposit = transaction(
+            transaction::TransactionKind::Deposit {
+                amount: Amount::new(3, 1),
+            },
+            1,
+            1,
+        );
+        let deposit_change = processor.produce_delta(deposit);
+
+        assert_eq!(
+            deposit_change.available.unwrap_or_default(),
+            Amount::new(3, 1)
+        );
+        assert!(deposit_change.held.is_none());
+        assert!(deposit_change.locked.is_none());
+
+        let dispute = transaction(transaction::TransactionKind::Dispute, 1, 1);
+        let dispute_change = processor.produce_delta(dispute);
+
+        assert_eq!(
+            dispute_change.available.unwrap_or_default(),
+            Amount::new(-3, 1)
+        );
+        assert_eq!(dispute_change.held.unwrap_or_default(), Amount::new(3, 1));
+        assert!(dispute_change.locked.is_none());
+
+        let resolve = transaction(transaction::TransactionKind::Resolve, 1, 1);
+        let resolve_change = processor.produce_delta(resolve);
+
+        assert_eq!(
+            resolve_change.available.unwrap_or_default(),
+            Amount::new(3, 1)
+        );
+        assert_eq!(resolve_change.held.unwrap_or_default(), Amount::new(-3, 1));
+        assert!(dispute_change.locked.is_none());
+
+        let dispute2 = transaction(transaction::TransactionKind::Dispute, 1, 1);
+        let dispute2_change = processor.produce_delta(dispute2);
+
+        assert!(dispute2_change.available.is_none());
+        assert!(dispute2_change.held.is_none());
+        assert!(dispute2_change.locked.is_none());
     }
 
     #[test]
