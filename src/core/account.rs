@@ -25,7 +25,7 @@ pub struct Account {
     pub(crate) locked: bool,
 }
 
-pub fn fixed_width_amount<S>(amount: &Amount, serializer: S) -> Result<S::Ok, S::Error>
+fn fixed_width_amount<S>(amount: &Amount, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {

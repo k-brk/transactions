@@ -46,10 +46,17 @@ pub struct TransactionMetadata {
     pub tx_id: TransactionID,
 }
 
+/// States of transaction
+/// New
+/// Success - transaction is successfully processed
+/// Failed - transaction processing failed
+/// Disputed - transaction is being disputed
+/// Resolved - dispute has been resolved
+/// Chargeback - transaction has been chargedback
 #[derive(Debug, PartialEq, Eq)]
 pub enum TransactionState {
     New,
-    Success,
+    Succeeded,
     Failed,
     Disputed,
     Resolved,

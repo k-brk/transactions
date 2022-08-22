@@ -16,8 +16,6 @@ pub enum AppError {
     OpenFileError(#[from] std::io::Error),
     #[error("{0}")]
     InvalidFileExt(String),
-    #[error("{0}")]
-    DeserializeTransactionError(#[from] csv::Error),
 }
 
 fn main() -> Result<(), AppError> {
