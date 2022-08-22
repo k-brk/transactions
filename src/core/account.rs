@@ -1,5 +1,5 @@
 use rust_decimal::Decimal;
-use serde::Serialize;
+use serde::{Serialize, Serializer};
 
 pub type ClientID = u16;
 pub type Amount = Decimal;
@@ -16,10 +16,28 @@ pub enum AccountError {
 pub struct Account {
     #[serde(rename = "client")]
     pub(crate) id: ClientID,
+    #[serde(serialize_with = "fixed_width_amount")]
     pub(crate) available: Amount,
+    #[serde(serialize_with = "fixed_width_amount")]
     pub(crate) held: Amount,
+    #[serde(serialize_with = "fixed_width_amount")]
     pub(crate) total: Amount,
     pub(crate) locked: bool,
+}
+
+pub fn fixed_width_amount<S>(amount: &Amount, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    const PRECISION: u32 = 4;
+    serializer.serialize_str(
+        &amount
+            .round_dp_with_strategy(
+                PRECISION,
+                rust_decimal::RoundingStrategy::MidpointAwayFromZero,
+            )
+            .to_string(),
+    )
 }
 
 impl Account {
@@ -37,7 +55,9 @@ impl Account {
         }
 
         if let Some(available) = change.available {
-            if self.available + available < Decimal::ZERO {
+            let can_create_debt = change.can_create_debt.unwrap_or_default();
+
+            if !can_create_debt && self.available + available < Decimal::ZERO {
                 return Err(AccountError::InsufficientFunds);
             }
             self.available += available;
@@ -61,14 +81,15 @@ impl Account {
     }
 }
 
-
-
 /// Represents potential account changes which are outcome of incoming transaction
 #[derive(Default)]
 pub struct AccountDelta {
     pub available: Option<Amount>,
     pub held: Option<Amount>,
     pub locked: Option<bool>,
+
+    // This is only possible when there is dispute on deposit and user already withdrawn those funds
+    pub can_create_debt: Option<bool>,
 }
 
 // Helpers for different kind of transactions
@@ -100,6 +121,7 @@ impl AccountDelta {
         Self {
             available: Some(-amount),
             held: Some(amount),
+            can_create_debt: Some(true),
             ..Default::default()
         }
     }
