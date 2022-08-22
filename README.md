@@ -13,7 +13,7 @@ Output of command will be returned to stdout.
 
 ## Implementation
 
-Delta based approach has been choosen, each transaction is converted to structure with changes(increased balance, account locked, etc.) which is later on applied to user account. By doing this way account is decoupled from transactions, rollback can be easily obtained and deltas can be used to recreate user balance upto any given point.
+Delta based approach has been choosen, each transaction is converted to structure with changes(increased balance, account locked, etc.) which is later on applied to user account. By doing this way account is decoupled from transactions, rollback can be easily implemented and deltas can be used to recreate user balance upto any given point.
 
 
 - `core/engine.rs`
@@ -58,17 +58,18 @@ Delta based approach has been choosen, each transaction is converted to structur
         pub available: Option<Amount>,
         pub held: Option<Amount>,
         pub locked: Option<bool>,
+        pub can_create_debt: Option<bool>,
     }
     ```
     Any or all of fileds can be set to be applied later on on user account.
 
-    For convenience, `AccountDelta` has several methods that are tailored for transactions to avoid mistakes. 
+    For convenience, `AccountDelta` has several methods that are tailored for transactions types. 
     
 - `core/account.rs`
 
     Has a definition of `AccountDelta`, its helpers and user account `Account`. 
     
-    `Account` model represents user account, has ability to apply changes from `AccountDelta` and it is used for serialization into output csv. 
+    `Account` model represents user account, `AccountDelta` are changes which are applied to `Account` to reflect transaction.
 
 
 - `core/transaction.rs`
@@ -79,3 +80,6 @@ Delta based approach has been choosen, each transaction is converted to structur
 
     Simple memory storages for accounts and transactions
 
+## Additional assumptions
+
+- Account can have debt only when there is dispute on deposit which has been already withdrawn
